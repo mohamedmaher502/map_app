@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+
 import '../core/map_styles.dart';
 import '../models/place.dart';
 import '../models/route_info.dart';
@@ -12,24 +13,30 @@ import '../widgets/route_info_card.dart';
 import '../widgets/search_field.dart';
 import '../widgets/url_marker_icon.dart';
 
+
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
+
 
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
+
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
+
   LatLng? _currentLocation; // بند 01
   String? _currentAddress; // عنوان الموقع الحالي (reverse geocoding)
   Place? _destination; // بند 02
   RouteInfo? _route; // بند 04
 
+
   MapStyle _style = MapStyles.standard; // بند 05 + 09
+
 
   /// مهم: MapController ممنوع تستخدمه قبل ما الخريطة تتبنى لأول مرة،
   /// وإلا بيرمي exception ويعمل crash. فبنستنى onMapReady.
@@ -37,10 +44,17 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _pendingCenter;
   double _pendingZoom = 15;
 
+
   bool _loadingLocation = false;
   bool _searching = false;
   bool _loadingRoute = false;
   String? _errorMessage; // بند 10
+
+
+  /// لحد ما نعرف موقع المستخدم (أو نفشل بشكل نهائي) بنفضل نعرض شاشة
+  /// تحميل بسيطة بدل ما نوريه شاشة بيضاء/فاضية أو خريطة على مكان غلط.
+  bool get _showMap => _currentLocation != null || _errorMessage != null;
+
 
   @override
   void initState() {
@@ -50,6 +64,7 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) _initLocation();
     });
   }
+
 
   /// تحريك آمن للكاميرا: لو الخريطة لسه مش جاهزة بنخزّن الطلب
   void _safeMove(LatLng center, double zoom) {
@@ -64,6 +79,7 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('map move skipped: $e');
     }
   }
+
 
   /// تكبير آمن ليشمل المسار كله
   void _safeFit(List<LatLng> points) {
@@ -80,11 +96,13 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
+
 
   // ---------------- بند 01: Get Current Location ----------------
   /// بتتنفّذ أول ما الشاشة تفتح، وكمان كل ما تدوس على زرار الموقع
@@ -98,16 +116,20 @@ class _MapScreenState extends State<MapScreen> {
       _errorMessage = null;
     });
 
+
     try {
       final location = await LocationService.getCurrentLocation();
       if (!mounted) return;
 
+
       setState(() => _currentLocation = location);
+
 
       if (moveCamera) {
         // لو فيه مسار مرسوم منعملش زوم جامد، بنقرّب على الموقع فقط
         _safeMove(location, _route != null ? 13 : 15);
       }
+
 
       if (showFeedback && mounted) {
         ScaffoldMessenger.of(context)
@@ -121,6 +143,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
       }
+
 
       // عنوان مقروء للموقع الحالي (مش لازم نستنّى عليه)
       final address = await GeocodingService.reverse(
@@ -148,6 +171,7 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) setState(() => _loadingLocation = false);
     }
   }
+
 
   /// ديالوج يودي المستخدم للإعدادات لو الصلاحية أو الـ GPS مقفولين
   void _showSettingsDialog({
@@ -179,25 +203,31 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+
   // ---------------- بند 02: Search for a Location ----------------
   Future<void> _searchPlace() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     FocusScope.of(context).unfocus();
+
 
     setState(() {
       _searching = true;
       _errorMessage = null;
     });
 
+
     try {
       final results = await GeocodingService.search(_searchController.text);
       if (!mounted) return;
+
 
       final Place? selected = results.length == 1
           ? results.first
           : await _pickFromResults(results);
 
+
       if (selected == null) return;
+
 
       setState(() {
         _destination = selected;
@@ -212,6 +242,7 @@ class _MapScreenState extends State<MapScreen> {
       if (mounted) setState(() => _searching = false);
     }
   }
+
 
   /// اختيار نتيجة من عدة نتائج
   Future<Place?> _pickFromResults(List<Place> results) {
@@ -241,6 +272,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+
   // ---------------- بند 04 + 07 + 08: Route + Distance + Duration ----------
   Future<void> _getRoute() async {
     if (_currentLocation == null) {
@@ -252,10 +284,12 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
+
     setState(() {
       _loadingRoute = true;
       _errorMessage = null;
     });
+
 
     try {
       final route = await RoutingService.getRoute(
@@ -274,6 +308,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+
   void _clearAll() {
     setState(() {
       _destination = null;
@@ -283,6 +318,7 @@ class _MapScreenState extends State<MapScreen> {
     });
     if (_currentLocation != null) _safeMove(_currentLocation!, 14);
   }
+
 
   // ---------------- بند 10: Handle Errors & States ----------------
   void _showError(String message) {
@@ -303,6 +339,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
   }
+
 
   // ---------------- UI ----------------
   @override
@@ -342,17 +379,34 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          _buildMap(),
-          _buildSearchBar(),
-          if (_errorMessage != null && _destination == null) _buildErrorBanner(),
-          if (_destination != null)
-            _buildBottomCard()
-          else if (_currentLocation != null)
-            _buildCurrentLocationChip(),
-        ],
-      ),
+      body: _showMap
+          ? Stack(
+              children: [
+                _buildMap(),
+                _buildSearchBar(),
+                if (_errorMessage != null && _destination == null)
+                  _buildErrorBanner(),
+                if (_destination != null)
+                  _buildBottomCard()
+                else if (_currentLocation != null)
+                  _buildCurrentLocationChip(),
+              ],
+            )
+          // لسه بنستنى الموقع الحالي لأول مرة: بنوري لودر بدل الشاشة الفاضية
+          : const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFF1565C0)),
+                  SizedBox(height: 14),
+                  Text(
+                    'جاري تحديد موقعك الحالي...',
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -380,12 +434,13 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+
   Widget _buildMap() {
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
         initialCenter: _currentLocation ?? const LatLng(30.0444, 31.2357),
-        initialZoom: 12,
+        initialZoom: _currentLocation != null ? 15 : 12,
         minZoom: 2,
         maxZoom: 18,
         onTap: (_, __) => FocusScope.of(context).unfocus(),
@@ -410,6 +465,7 @@ class _MapScreenState extends State<MapScreen> {
           maxZoom: 18,
         ),
 
+
         // بند 04: رسم المسار الحقيقي
         if (_route != null)
           PolylineLayer(
@@ -423,6 +479,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ],
           ),
+
 
         // بند 03 + 06: الماركرز بأيقونات من URLs
         MarkerLayer(
@@ -459,6 +516,7 @@ class _MapScreenState extends State<MapScreen> {
           ],
         ),
 
+
         // حقوق الخريطة (مطلوب مع OpenStreetMap)
         Align(
           alignment: Alignment.bottomLeft,
@@ -475,6 +533,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+
   Widget _buildSearchBar() {
     return Positioned(
       top: 12,
@@ -489,6 +548,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
+
 
   Widget _buildErrorBanner() {
     return Positioned(
@@ -521,6 +581,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
+
 
   /// كارت صغير بيعرض موقعك الحالي (وقت ما مفيش وجهة محددة)
   Widget _buildCurrentLocationChip() {
@@ -574,6 +635,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
+
 
   /// شيت تشخيصي: حالة الـ GPS والصلاحية وآخر موقع معروف
   Future<void> _showDiagnostics() async {
@@ -633,6 +695,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+
   /// تفاصيل الموقع الحالي لما تدوس على الماركر أو الكارت
   void _showCurrentLocationSheet() {
     if (_currentLocation == null) return;
@@ -683,6 +746,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
+
 
   Widget _buildBottomCard() {
     return Align(
