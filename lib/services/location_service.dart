@@ -4,7 +4,19 @@ import 'package:latlong2/latlong.dart';
 /// استثناء مخصص لأخطاء الموقع (بند 10: Handle Errors)
 class LocationFailure implements Exception {
   final String message;
-  LocationFailure(this.message);
+
+  /// محتاج يفتح إعدادات التطبيق (صلاحية مرفوضة نهائيًا)
+  final bool needsAppSettings;
+
+  /// محتاج يشغّل الـ GPS من إعدادات الجهاز
+  final bool needsLocationSettings;
+
+  LocationFailure(
+    this.message, {
+    this.needsAppSettings = false,
+    this.needsLocationSettings = false,
+  });
+
   @override
   String toString() => message;
 }
@@ -14,7 +26,10 @@ class LocationService {
   static Future<LatLng> getCurrentLocation() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      throw LocationFailure('خدمة الموقع (GPS) مقفولة. من فضلك شغّلها وحاول تاني.');
+      throw LocationFailure(
+        'خدمة الموقع (GPS) مقفولة. من فضلك شغّلها وحاول تاني.',
+        needsLocationSettings: true,
+      );
     }
 
     var permission = await Geolocator.checkPermission();
@@ -28,7 +43,9 @@ class LocationService {
 
     if (permission == LocationPermission.deniedForever) {
       throw LocationFailure(
-          'صلاحية الموقع مرفوضة نهائيًا. افتح إعدادات التطبيق واسمح بالوصول للموقع.');
+        'صلاحية الموقع مرفوضة نهائيًا. افتح إعدادات التطبيق واسمح بالوصول للموقع.',
+        needsAppSettings: true,
+      );
     }
 
     try {
@@ -46,4 +63,11 @@ class LocationService {
       throw LocationFailure('مش قادر أحدد موقعك الحالي. جرّب في مكان مفتوح.');
     }
   }
+
+  /// فتح إعدادات التطبيق للسماح بالصلاحية يدويًا
+  static Future<void> openAppSettings() => Geolocator.openAppSettings();
+
+  /// فتح إعدادات الموقع (GPS) في الجهاز
+  static Future<void> openLocationSettings() =>
+      Geolocator.openLocationSettings();
 }

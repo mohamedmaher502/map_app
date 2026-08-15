@@ -25,6 +25,7 @@ class _MapScreenState extends State<MapScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   LatLng? _currentLocation; // بند 01
+  String? _currentAddress; // عنوان الموقع الحالي (reverse geocoding)
   Place? _destination; // بند 02
   RouteInfo? _route; // بند 04
 
@@ -48,7 +49,12 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // ---------------- بند 01: Get Current Location ----------------
-  Future<void> _initLocation({bool moveCamera = true}) async {
+  /// بتتنفّذ أول ما الشاشة تفتح، وكمان كل ما تدوس على زرار الموقع
+  /// [showFeedback] = true لما المستخدم هو اللي طلب الموقع بنفسه
+  Future<void> _initLocation({
+    bool moveCamera = true,
+    bool showFeedback = false,
+  }) async {
     setState(() {
       _loadingLocation = true;
       _errorMessage = null;
@@ -57,15 +63,81 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final location = await LocationService.getCurrentLocation();
       if (!mounted) return;
+
       setState(() => _currentLocation = location);
-      if (moveCamera) _mapController.move(location, 14);
+
+      if (moveCamera) {
+        // لو فيه مسار مرسوم منعملش زوم جامد، بنقرّب على الموقع فقط
+        _mapController.move(location, _route != null ? 13 : 15);
+      }
+
+      if (showFeedback) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('تم تحديد موقعك الحالي',
+                  textDirection: TextDirection.rtl),
+              duration: Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+      }
+
+      // عنوان مقروء للموقع الحالي (مش لازم نستنّى عليه)
+      final address = await GeocodingService.reverse(
+        location.latitude,
+        location.longitude,
+      );
+      if (mounted) setState(() => _currentAddress = address);
     } on LocationFailure catch (e) {
       _showError(e.message);
+      if (e.needsAppSettings) {
+        _showSettingsDialog(
+          message: e.message,
+          onOpen: LocationService.openAppSettings,
+        );
+      } else if (e.needsLocationSettings) {
+        _showSettingsDialog(
+          message: e.message,
+          onOpen: LocationService.openLocationSettings,
+        );
+      }
     } catch (e) {
       _showError('حدث خطأ غير متوقع أثناء تحديد الموقع.');
     } finally {
       if (mounted) setState(() => _loadingLocation = false);
     }
+  }
+
+  /// ديالوج يودي المستخدم للإعدادات لو الصلاحية أو الـ GPS مقفولين
+  void _showSettingsDialog({
+    required String message,
+    required Future<void> Function() onOpen,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('محتاجين إذن الموقع'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                onOpen();
+              },
+              child: const Text('فتح الإعدادات'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ---------------- بند 02: Search for a Location ----------------
@@ -246,7 +318,10 @@ class _MapScreenState extends State<MapScreen> {
           _buildMap(),
           _buildSearchBar(),
           if (_errorMessage != null && _destination == null) _buildErrorBanner(),
-          if (_destination != null) _buildBottomCard(),
+          if (_destination != null)
+            _buildBottomCard()
+          else if (_currentLocation != null)
+            _buildCurrentLocationChip(),
         ],
       ),
       floatingActionButton: Column(
@@ -255,7 +330,10 @@ class _MapScreenState extends State<MapScreen> {
           FloatingActionButton(
             heroTag: 'my_location',
             backgroundColor: Colors.white,
-            onPressed: _loadingLocation ? null : () => _initLocation(),
+            tooltip: 'موقعي الحالي',
+            onPressed: _loadingLocation
+                ? null
+                : () => _initLocation(showFeedback: true),
             child: _loadingLocation
                 ? const SizedBox(
                     width: 20,
@@ -311,11 +389,14 @@ class _MapScreenState extends State<MapScreen> {
                 width: 60,
                 height: 62,
                 alignment: Alignment.topCenter,
-                child: const UrlMarkerIcon(
-                  url: MarkerIcons.currentLocation,
-                  fallbackIcon: Icons.my_location,
-                  fallbackColor: Colors.blue,
-                  label: 'You',
+                child: GestureDetector(
+                  onTap: _showCurrentLocationSheet,
+                  child: const UrlMarkerIcon(
+                    url: MarkerIcons.currentLocation,
+                    fallbackIcon: Icons.my_location,
+                    fallbackColor: Colors.blue,
+                    label: 'You',
+                  ),
                 ),
               ),
             if (_destination != null)
@@ -389,6 +470,110 @@ class _MapScreenState extends State<MapScreen> {
               IconButton(
                 icon: const Icon(Icons.close, size: 18),
                 onPressed: () => setState(() => _errorMessage = null),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// كارت صغير بيعرض موقعك الحالي (وقت ما مفيش وجهة محددة)
+  Widget _buildCurrentLocationChip() {
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+        child: Material(
+          elevation: 6,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: _showCurrentLocationSheet,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.my_location,
+                      color: Color(0xFF1565C0), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Your current location',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1565C0),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _currentAddress ??
+                              '${_currentLocation!.latitude.toStringAsFixed(4)}, '
+                                  '${_currentLocation!.longitude.toStringAsFixed(4)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 20),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// تفاصيل الموقع الحالي لما تدوس على الماركر أو الكارت
+  void _showCurrentLocationSheet() {
+    if (_currentLocation == null) return;
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.my_location, color: Color(0xFF1565C0)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Current Location',
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(_currentAddress ?? 'العنوان غير متوفر'),
+              const SizedBox(height: 8),
+              Text('Latitude: ${_currentLocation!.latitude.toStringAsFixed(6)}'),
+              Text(
+                  'Longitude: ${_currentLocation!.longitude.toStringAsFixed(6)}'),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _initLocation(showFeedback: true);
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh my location'),
+                ),
               ),
             ],
           ),

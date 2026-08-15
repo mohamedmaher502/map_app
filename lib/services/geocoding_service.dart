@@ -16,6 +16,8 @@ class GeocodingFailure implements Exception {
 /// باستخدام Nominatim (OpenStreetMap) Geocoding API
 class GeocodingService {
   static const String _baseUrl = 'https://nominatim.openstreetmap.org/search';
+  static const String _reverseUrl =
+      'https://nominatim.openstreetmap.org/reverse';
 
   /// Nominatim بيطلب User-Agent واضح، غيّره لاسم تطبيقك
   static const Map<String, String> _headers = {
@@ -62,5 +64,34 @@ class GeocodingService {
   static Future<Place> searchFirst(String query) async {
     final results = await search(query, limit: 1);
     return results.first;
+  }
+
+  /// Reverse Geocoding: تحويل إحداثيات لعنوان مقروء
+  /// بيُستخدم مع زرار "موقعي الحالي" لعرض اسم المكان بدل أرقام بس
+  static Future<String?> reverse(double lat, double lon) async {
+    final uri = Uri.parse(_reverseUrl).replace(queryParameters: {
+      'lat': '$lat',
+      'lon': '$lon',
+      'format': 'json',
+      'zoom': '16',
+    });
+
+    try {
+      final res = await http.get(uri, headers: _headers).timeout(
+            const Duration(seconds: 15),
+          );
+      if (res.statusCode != 200) return null;
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final name = data['display_name']?.toString();
+      if (name == null || name.isEmpty) return null;
+
+      // نرجّع أول 3 أجزاء بس عشان يبان مختصر
+      final parts = name.split(',').map((e) => e.trim()).toList();
+      return parts.take(3).join(', ');
+    } catch (_) {
+      // مش خطأ حرج — الموقع بيتعرض عادي بالإحداثيات
+      return null;
+    }
   }
 }
