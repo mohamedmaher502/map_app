@@ -91,6 +91,7 @@ class _MapScreenState extends State<MapScreen> {
       );
       if (mounted) setState(() => _currentAddress = address);
     } on LocationFailure catch (e) {
+      if (e.details != null) debugPrint('Location error details: ${e.details}');
       _showError(e.message);
       if (e.needsAppSettings) {
         _showSettingsDialog(
@@ -327,20 +328,24 @@ class _MapScreenState extends State<MapScreen> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          FloatingActionButton(
-            heroTag: 'my_location',
-            backgroundColor: Colors.white,
-            tooltip: 'موقعي الحالي',
-            onPressed: _loadingLocation
-                ? null
-                : () => _initLocation(showFeedback: true),
-            child: _loadingLocation
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.my_location, color: Color(0xFF1565C0)),
+          // ضغطة = جلب الموقع الحالي ، ضغطة مطوّلة = شيت التشخيص
+          GestureDetector(
+            onLongPress: _showDiagnostics,
+            child: FloatingActionButton(
+              heroTag: 'my_location',
+              backgroundColor: Colors.white,
+              tooltip: 'موقعي الحالي (اضغط مطوّل للتشخيص)',
+              onPressed: _loadingLocation
+                  ? null
+                  : () => _initLocation(showFeedback: true),
+              child: _loadingLocation
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location, color: Color(0xFF1565C0)),
+            ),
           ),
         ],
       ),
@@ -525,6 +530,64 @@ class _MapScreenState extends State<MapScreen> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// شيت تشخيصي: حالة الـ GPS والصلاحية وآخر موقع معروف
+  Future<void> _showDiagnostics() async {
+    final report = await LocationService.diagnostics();
+    if (!mounted) return;
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Location diagnostics',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              ...report.entries.map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 110,
+                        child: Text(
+                          e.key,
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Expanded(child: Text(e.value)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    LocationService.openLocationSettings();
+                  },
+                  icon: const Icon(Icons.settings),
+                  label: const Text('فتح إعدادات الموقع'),
+                ),
+              ),
+            ],
           ),
         ),
       ),

@@ -34,6 +34,7 @@ flutter pub get
 flutter run
 ```
 الصلاحيات المطلوبة موجودة في [PERMISSIONS.md](PERMISSIONS.md).
+مشاكل تحديد الموقع وحلولها في [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## APIs
 - Geocoding: https://nominatim.openstreetmap.org/search
