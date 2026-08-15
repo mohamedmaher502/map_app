@@ -31,6 +31,12 @@ class _MapScreenState extends State<MapScreen> {
 
   MapStyle _style = MapStyles.standard; // بند 05 + 09
 
+  /// مهم: MapController ممنوع تستخدمه قبل ما الخريطة تتبنى لأول مرة،
+  /// وإلا بيرمي exception ويعمل crash. فبنستنى onMapReady.
+  bool _mapReady = false;
+  LatLng? _pendingCenter;
+  double _pendingZoom = 15;
+
   bool _loadingLocation = false;
   bool _searching = false;
   bool _loadingRoute = false;
@@ -39,7 +45,39 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _initLocation();
+    // بنأجّل طلب الموقع لأول frame عشان الـ context والخريطة يكونوا جاهزين
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initLocation();
+    });
+  }
+
+  /// تحريك آمن للكاميرا: لو الخريطة لسه مش جاهزة بنخزّن الطلب
+  void _safeMove(LatLng center, double zoom) {
+    if (!_mapReady) {
+      _pendingCenter = center;
+      _pendingZoom = zoom;
+      return;
+    }
+    try {
+      _mapController.move(center, zoom);
+    } catch (e) {
+      debugPrint('map move skipped: $e');
+    }
+  }
+
+  /// تكبير آمن ليشمل المسار كله
+  void _safeFit(List<LatLng> points) {
+    if (points.isEmpty || !_mapReady) return;
+    try {
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(points),
+          padding: const EdgeInsets.fromLTRB(40, 120, 40, 260),
+        ),
+      );
+    } catch (e) {
+      debugPrint('map fit skipped: $e');
+    }
   }
 
   @override
@@ -68,10 +106,10 @@ class _MapScreenState extends State<MapScreen> {
 
       if (moveCamera) {
         // لو فيه مسار مرسوم منعملش زوم جامد، بنقرّب على الموقع فقط
-        _mapController.move(location, _route != null ? 13 : 15);
+        _safeMove(location, _route != null ? 13 : 15);
       }
 
-      if (showFeedback) {
+      if (showFeedback && mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
@@ -165,7 +203,7 @@ class _MapScreenState extends State<MapScreen> {
         _destination = selected;
         _route = null; // مسار قديم يتشال
       });
-      _mapController.move(selected.latLng, 13);
+      _safeMove(selected.latLng, 13);
     } on GeocodingFailure catch (e) {
       _showError(e.message);
     } catch (e) {
@@ -226,7 +264,7 @@ class _MapScreenState extends State<MapScreen> {
       );
       if (!mounted) return;
       setState(() => _route = route);
-      _fitRoute(route.points);
+      _safeFit(route.points);
     } on RoutingFailure catch (e) {
       _showError(e.message);
     } catch (e) {
@@ -236,16 +274,6 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _fitRoute(List<LatLng> points) {
-    if (points.isEmpty) return;
-    _mapController.fitCamera(
-      CameraFit.bounds(
-        bounds: LatLngBounds.fromPoints(points),
-        padding: const EdgeInsets.fromLTRB(40, 120, 40, 260),
-      ),
-    );
-  }
-
   void _clearAll() {
     setState(() {
       _destination = null;
@@ -253,7 +281,7 @@ class _MapScreenState extends State<MapScreen> {
       _errorMessage = null;
       _searchController.clear();
     });
-    if (_currentLocation != null) _mapController.move(_currentLocation!, 14);
+    if (_currentLocation != null) _safeMove(_currentLocation!, 14);
   }
 
   // ---------------- بند 10: Handle Errors & States ----------------
@@ -361,6 +389,17 @@ class _MapScreenState extends State<MapScreen> {
         minZoom: 2,
         maxZoom: 18,
         onTap: (_, __) => FocusScope.of(context).unfocus(),
+        onMapReady: () {
+          _mapReady = true;
+          // لو الموقع وصل قبل ما الخريطة تجهز، بننفّذ الحركة دلوقتي
+          final pending = _pendingCenter;
+          if (pending != null) {
+            _pendingCenter = null;
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _safeMove(pending, _pendingZoom),
+            );
+          }
+        },
       ),
       children: [
         // بند 05: Map Tiles من URL

@@ -67,3 +67,31 @@ Location error details: ....
 ```
 
 شغّل `flutter run` من التيرمنال، دوس على زرار الموقع، وابعتلي السطر اللي بيظهر.
+
+## 7) Crash أول ما يجيب الموقع (MapController used before map render)
+
+**السبب:** استخدام `_mapController.move()` قبل ما `FlutterMap` تتبني لأول مرة —
+`flutter_map` بيرمي:
+
+```
+You need to have the FlutterMap widget rendered at least once before using MapController
+```
+
+وده كان بيحصل لأن `_initLocation()` كانت بتتنادى من `initState` ولو الموقع رجع بسرعة
+(من كاش الجهاز) الحركة بتحصل قبل أول frame.
+
+**الحل المطبّق:**
+- طلب الموقع بقى جوه `WidgetsBinding.instance.addPostFrameCallback`
+- `MapOptions.onMapReady` بيرفع فلاج `_mapReady`
+- كل حركات الكاميرا بقت من خلال `_safeMove` / `_safeFit` اللي:
+  - بيخزّنوا الطلب لو الخريطة لسه مش جاهزة وينفّذوه في `onMapReady`
+  - وملفوفين في `try/catch` فمفيش crash في أي حالة
+
+## 8) MissingPluginException
+
+لو الرسالة `MissingPluginException(No implementation found for method ...)`:
+أوقف التطبيق تمامًا (مش hot reload) و:
+
+```bash
+flutter clean && flutter pub get && flutter run
+```
