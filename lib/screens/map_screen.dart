@@ -463,6 +463,7 @@ class _MapScreenState extends State<MapScreen> {
           subdomains: _style.subdomains,
           userAgentPackageName: 'com.example.map_route_planner',
           maxZoom: 18,
+          retinaMode: RetinaMode.isHighDensity(context),
         ),
 
 
@@ -686,58 +687,6 @@ class _MapScreenState extends State<MapScreen> {
                   },
                   icon: const Icon(Icons.settings),
                   label: const Text('فتح إعدادات الموقع'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-
-  /// تفاصيل الموقع الحالي لما تدوس على الماركر أو الكارت
-  void _showCurrentLocationSheet() {
-    if (_currentLocation == null) return;
-    showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.my_location, color: Color(0xFF1565C0)),
-                  SizedBox(width: 8),
-                  Text(
-                    'Current Location',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(_currentAddress ?? 'العنوان غير متوفر'),
-              const SizedBox(height: 8),
-              Text('Latitude: ${_currentLocation!.latitude.toStringAsFixed(6)}'),
-              Text(
-                  'Longitude: ${_currentLocation!.longitude.toStringAsFixed(6)}'),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _initLocation(showFeedback: true);
-                  },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh my location'),
                 ),
               ),
             ],
