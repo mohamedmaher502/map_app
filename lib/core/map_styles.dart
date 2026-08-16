@@ -5,6 +5,7 @@ class MapStyle {
   final String attribution;
   final List<String> subdomains;
 
+
   const MapStyle({
     required this.name,
     required this.urlTemplate,
@@ -13,12 +14,21 @@ class MapStyle {
   });
 }
 
+
 class MapStyles {
+  // ملاحظة مهمة: تم التحويل من tile.openstreetmap.org إلى CARTO
+  // لأن سيرفر OpenStreetMap الرسمي بيعمل حظر مؤقت (rate limit) على
+  // التطبيقات وقت التطوير/التجربة المكثفة، فبتظهر الخريطة بيضاء
+  // بالكامل بدون أي خطأ واضح. CARTO بيقدّم نفس بيانات OSM لكن
+  // بسياسة استخدام أكثر مرونة للتطبيقات.
   static const standard = MapStyle(
     name: 'Standard',
-    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '© OpenStreetMap contributors',
+    urlTemplate:
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '© OpenStreetMap contributors © CARTO',
+    subdomains: ['a', 'b', 'c', 'd'],
   );
+
 
   static const humanitarian = MapStyle(
     name: 'Humanitarian',
@@ -27,11 +37,13 @@ class MapStyles {
     subdomains: ['a', 'b', 'c'],
   );
 
+
   static const topo = MapStyle(
     name: 'Topographic',
     urlTemplate: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
     attribution: '© OpenTopoMap (CC-BY-SA)',
   );
+
 
   static const satellite = MapStyle(
     name: 'Satellite',
@@ -40,8 +52,10 @@ class MapStyles {
     attribution: 'Esri, Maxar, Earthstar Geographics',
   );
 
+
   static const List<MapStyle> all = [standard, humanitarian, topo, satellite];
 }
+
 
 /// (بند 06) أيقونات الماركرز محمّلة من URLs
 class MarkerIcons {
